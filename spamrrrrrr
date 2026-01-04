@@ -17,6 +17,9 @@ local COMMANDS = {
     ";jumpscare"
 }
 
+local JAIL_DELAY = 0.6
+local RAGDOLL_DELAY = 1.2
+
 -- COLORS
 local PURPLE = Color3.fromRGB(190,160,255)
 local PURPLE_DARK = Color3.fromRGB(160,130,220)
@@ -48,6 +51,49 @@ local function sendChat(msg)
             :WaitForChild("SayMessageRequest")
             :FireServer(msg, "All")
     end
+end
+
+-- TRACK LAST TARGET (SESSION ONLY)
+local lastTarget
+local deathConn
+local respawnConn
+
+local function clearConnections()
+    if deathConn then deathConn:Disconnect() deathConn = nil end
+    if respawnConn then respawnConn:Disconnect() respawnConn = nil end
+end
+
+local function hookTarget(plr)
+    clearConnections()
+    lastTarget = plr
+
+    local function onCharacter(char)
+        local humanoid = char:WaitForChild("Humanoid", 5)
+        if not humanoid then return end
+
+        deathConn = humanoid.Died:Connect(function()
+            -- 0.6s after death -> jail
+            task.delay(JAIL_DELAY, function()
+                if lastTarget == plr then
+                    sendChat(";jail " .. plr.Name)
+                end
+            end)
+
+            -- wait for respawn
+            respawnConn = plr.CharacterAdded:Connect(function(newChar)
+                task.delay(RAGDOLL_DELAY, function()
+                    if lastTarget == plr then
+                        sendChat(";ragdoll " .. plr.Name)
+                    end
+                end)
+            end)
+        end)
+    end
+
+    if plr.Character then
+        onCharacter(plr.Character)
+    end
+    plr.CharacterAdded:Connect(onCharacter)
 end
 
 -- CLEAN OLD GUI
@@ -161,12 +207,15 @@ do
     end)
 end
 
--- SPAM FUNCTION (CHAT BASED)
+-- ⚡ FAST PARALLEL CHAT SPAM + TARGET HOOK
 local function spamPlayer(plr)
+    hookTarget(plr)
     for _, cmd in ipairs(COMMANDS) do
-        sendChat(cmd .. " " .. plr.Name)
+        task.spawn(function()
+            sendChat(cmd .. " " .. plr.Name)
+        end)
     end
-    notify("Sent","Spammed @"..plr.Name.." via chat")
+    notify("Sent","Instant-spammed @"..plr.Name)
 end
 
 -- UI HELPERS
