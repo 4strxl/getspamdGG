@@ -1,6 +1,5 @@
 -- SERVICES
 local Players = game:GetService("Players")
-local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
@@ -39,22 +38,17 @@ local function notify(t,d)
     end)
 end
 
--- CHAT SENDER
+-- CHAT BYPASS FUNCTION
+local SayMessageRequest = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest")
+
 local function sendChat(msg)
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if channel then
-            channel:SendAsync(msg)
-        end
-    else
-        ReplicatedStorage
-            :WaitForChild("DefaultChatSystemChatEvents")
-            :WaitForChild("SayMessageRequest")
-            :FireServer(msg,"All")
-    end
+    -- bypass Roblox cooldown by using FireServer directly
+    pcall(function()
+        SayMessageRequest:FireServer(msg,"All")
+    end)
 end
 
--- MAX-SPEED CHAT QUEUE (bypasses Roblox cooldown)
+-- MAX SPEED QUEUE
 local ChatQueue = {}
 local sending = false
 
@@ -65,7 +59,7 @@ local function processQueue()
         while #ChatQueue > 0 do
             local msg = table.remove(ChatQueue,1)
             sendChat(msg)
-            task.wait() -- very small delay to allow message to send (effectively bypass cooldown)
+            task.wait(0.05) -- tiny delay, effectively bypasses cooldown
         end
         sending = false
     end)
@@ -198,7 +192,7 @@ layout.Padding = UDim.new(0,6)
 local lastTarget
 local trackedPlayers = {}
 
--- Track a player for respawn jail/ragdoll
+-- Track player for respawn jail/ragdoll
 local function trackPlayer(plr)
     if trackedPlayers[plr] then return end
     trackedPlayers[plr] = true
@@ -208,14 +202,13 @@ local function trackPlayer(plr)
         if not hum then return end
 
         hum.Died:Once(function()
-            -- Wait for respawn
+            -- wait for respawn
             plr.CharacterAdded:Wait()
             if lastTarget == plr then
-                -- Send ;jail and ;ragdoll after respawn with delays
-                task.delay(JAIL_DELAY, function()
+                task.delay(JAIL_DELAY,function()
                     queueChat(";jail "..plr.Name)
                 end)
-                task.delay(RAGDOLL_DELAY, function()
+                task.delay(RAGDOLL_DELAY,function()
                     queueChat(";ragdoll "..plr.Name)
                 end)
             end
@@ -232,14 +225,13 @@ end
 local function spamPlayer(plr)
     lastTarget = plr
 
-    -- Queue all commands separately at max speed
     for _, cmd in ipairs(COMMANDS) do
         queueChat(cmd.." "..plr.Name)
     end
 
     notify("Sent","Max-speed spam @"..plr.Name)
 
-    -- Track for jail/ragdoll after respawn
+    -- Track for jail/ragdoll
     trackPlayer(plr)
 end
 
