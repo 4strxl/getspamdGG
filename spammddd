@@ -1,13 +1,15 @@
+-- SERVICES
 local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
-local TextChatService = game:GetService("TextChatService")
-local LocalPlayer = Players.LocalPlayer
 
-repeat task.wait() until LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
+repeat task.wait() until LocalPlayer:FindFirstChild("PlayerGui")
 
 -- CONFIG
 local TITLE_TEXT = "4strxl spamrz"
+
 local COMMANDS = {
     ";rocket",
     ";balloon",
@@ -21,60 +23,65 @@ local JAIL_DELAY = 0.6
 local RAGDOLL_DELAY = 1.2
 
 -- COLORS
+local BG = Color3.fromRGB(255,255,255)
 local PURPLE = Color3.fromRGB(190,160,255)
 local PURPLE_DARK = Color3.fromRGB(160,130,220)
-local BG = Color3.fromRGB(255,255,255)
-local BTN = Color3.fromRGB(190,160,255)
-local BTN_HOVER = Color3.fromRGB(160,130,220)
+local BTN = PURPLE
+local BTN_HOVER = PURPLE_DARK
 
 -- NOTIFY
 local function notify(t,d)
     pcall(function()
         StarterGui:SetCore("SendNotification",{
-            Title=t,
-            Text=d,
-            Duration=3
+            Title = t,
+            Text = d,
+            Duration = 3
         })
     end)
 end
 
--- CHAT SENDER
+-- CHAT SENDER (NEW + OLD CHAT)
 local function sendChat(msg)
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if channel then channel:SendAsync(msg) end
+        if channel then
+            channel:SendAsync(msg)
+        end
     else
-        ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents")
+        ReplicatedStorage
+            :WaitForChild("DefaultChatSystemChatEvents")
             :WaitForChild("SayMessageRequest")
             :FireServer(msg, "All")
     end
 end
 
--- SESSION TARGET TRACKING
-local lastTarget
-local charConn
+-- =========================================================
+-- OPTION A: MAX‑SPEED LEGAL CHAT QUEUE (SEPARATE MESSAGES)
+-- =========================================================
+local ChatQueue = {}
+local sending = false
 
-local function hookTarget(plr)
-    lastTarget = plr
-    if charConn then charConn:Disconnect() end
+local function processQueue()
+    if sending then return end
+    sending = true
 
-    charConn = plr.CharacterAdded:Connect(function()
-        if lastTarget ~= plr then return end
+    task.spawn(function()
+        while #ChatQueue > 0 do
+            local msg = table.remove(ChatQueue, 1)
+            sendChat(msg)
 
-        -- jail AFTER respawn
-        task.delay(JAIL_DELAY, function()
-            if lastTarget == plr then
-                sendChat(";jail " .. plr.Name)
-            end
-        end)
-
-        -- ragdoll AFTER respawn
-        task.delay(RAGDOLL_DELAY, function()
-            if lastTarget == plr then
-                sendChat(";ragdoll " .. plr.Name)
-            end
-        end)
+            -- wait until Roblox allows next message (no warning)
+            repeat task.wait() until pcall(function()
+                sendChat("") -- permission probe (no visible spam)
+            end)
+        end
+        sending = false
     end)
+end
+
+local function queueChat(msg)
+    table.insert(ChatQueue, msg)
+    processQueue()
 end
 
 -- CLEAN OLD GUI
@@ -87,11 +94,10 @@ end)
 local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
 gui.Name = "4strxl_spamz_gui"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
 
 local main = Instance.new("Frame", gui)
 main.Size = UDim2.fromOffset(300,380)
-main.Position = UDim2.new(1,-310,0.5,-190)
+main.Position = UDim2.fromOffset(100,100)
 main.BackgroundColor3 = BG
 main.BorderSizePixel = 0
 Instance.new("UICorner", main).CornerRadius = UDim.new(0,14)
@@ -108,8 +114,8 @@ top.BorderSizePixel = 0
 Instance.new("UICorner", top).CornerRadius = UDim.new(0,14)
 
 local title = Instance.new("TextLabel", top)
-title.Size = UDim2.new(1,-90,1,0)
-title.Position = UDim2.fromOffset(12,0)
+title.Size = UDim2.new(1,-20,1,0)
+title.Position = UDim2.fromOffset(10,0)
 title.BackgroundTransparency = 1
 title.Text = TITLE_TEXT
 title.Font = Enum.Font.GothamBold
@@ -117,27 +123,32 @@ title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = Color3.fromRGB(245,245,245)
 
-local refresh = Instance.new("TextButton", top)
-refresh.Size = UDim2.fromOffset(78,26)
-refresh.Position = UDim2.new(1,-84,0,6)
-refresh.Text = "Refresh"
-refresh.Font = Enum.Font.Gotham
-refresh.TextSize = 14
-refresh.TextColor3 = Color3.fromRGB(255,255,255)
-refresh.BackgroundColor3 = PURPLE_DARK
-refresh.BorderSizePixel = 0
-Instance.new("UICorner", refresh).CornerRadius = UDim.new(0,8)
+-- DRAGGING
+do
+    local dragging, dragStart, startPos
+    top.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = i.Position
+            startPos = main.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
 
-local minBtn = Instance.new("TextButton", top)
-minBtn.Size = UDim2.fromOffset(28,26)
-minBtn.Position = UDim2.new(1,-30,0,6)
-minBtn.Text = "_"
-minBtn.Font = Enum.Font.Gotham
-minBtn.TextSize = 18
-minBtn.TextColor3 = Color3.fromRGB(255,255,255)
-minBtn.BackgroundColor3 = PURPLE_DARK
-minBtn.BorderSizePixel = 0
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0,8)
+    top.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = i.Position - dragStart
+            main.Position = UDim2.fromOffset(
+                startPos.X.Offset + delta.X,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
 
 -- CONTENT
 local holder = Instance.new("Frame", main)
@@ -147,6 +158,7 @@ holder.BackgroundTransparency = 1
 
 local list = Instance.new("ScrollingFrame", holder)
 list.Size = UDim2.fromScale(1,1)
+list.CanvasSize = UDim2.new()
 list.ScrollBarThickness = 6
 list.BackgroundTransparency = 1
 list.BorderSizePixel = 0
@@ -154,36 +166,49 @@ list.BorderSizePixel = 0
 local layout = Instance.new("UIListLayout", list)
 layout.Padding = UDim.new(0,6)
 
--- SPAM FUNCTION (FAST + TARGET SET)
+-- SESSION TARGET
+local lastTarget
+
+-- SPAM FUNCTION (SEPARATE MESSAGES, MAX SPEED)
 local function spamPlayer(plr)
-    hookTarget(plr)
+    lastTarget = plr
 
     for _, cmd in ipairs(COMMANDS) do
-        task.spawn(function()
-            sendChat(cmd .. " " .. plr.Name)
+        queueChat(cmd .. " " .. plr.Name)
+    end
+
+    notify("Sent", "Max-speed spam @" .. plr.Name)
+end
+
+-- RESPAWN → JAIL / RAGDOLL (SESSION‑ONLY)
+local function watchPlayer(plr)
+    local function onChar(char)
+        local hum = char:WaitForChild("Humanoid",5)
+        if not hum then return end
+
+        hum.Died:Once(function()
+            plr.CharacterAdded:Wait()
+            if lastTarget ~= plr then return end
+
+            task.delay(JAIL_DELAY, function()
+                queueChat(";jail " .. plr.Name)
+            end)
+
+            task.delay(RAGDOLL_DELAY, function()
+                queueChat(";ragdoll " .. plr.Name)
+            end)
         end)
     end
 
-    notify("Sent","Instant-spammed @"..plr.Name)
+    if plr.Character then onChar(plr.Character) end
+    plr.CharacterAdded:Connect(onChar)
 end
 
--- UI HELPERS
-local function section(text)
-    local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,-6,0,26)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.Font = Enum.Font.GothamBold
-    l.TextSize = 13
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.TextColor3 = Color3.fromRGB(120,120,120)
-    return l
-end
-
+-- PLAYER BUTTON
 local function spamButton(plr)
     local b = Instance.new("TextButton")
     b.Size = UDim2.new(1,-6,0,34)
-    b.Text = " @"..plr.Name
+    b.Text = " @" .. plr.Name
     b.TextXAlignment = Enum.TextXAlignment.Left
     b.Font = Enum.Font.Gotham
     b.TextSize = 14
@@ -192,9 +217,16 @@ local function spamButton(plr)
     b.BorderSizePixel = 0
     Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
 
-    b.MouseEnter:Connect(function() b.BackgroundColor3 = BTN_HOVER end)
-    b.MouseLeave:Connect(function() b.BackgroundColor3 = BTN end)
-    b.Activated:Connect(function() spamPlayer(plr) end)
+    b.MouseEnter:Connect(function()
+        b.BackgroundColor3 = BTN_HOVER
+    end)
+    b.MouseLeave:Connect(function()
+        b.BackgroundColor3 = BTN
+    end)
+
+    b.Activated:Connect(function()
+        spamPlayer(plr)
+    end)
 
     return b
 end
@@ -202,16 +234,13 @@ end
 -- REFRESH LIST
 local function refreshList()
     for _,v in ipairs(list:GetChildren()) do
-        if v:IsA("TextButton") or v:IsA("TextLabel") then
-            v:Destroy()
-        end
+        if v:IsA("TextButton") then v:Destroy() end
     end
-
-    section("spam commands").Parent = list
 
     for _,p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             spamButton(p).Parent = list
+            watchPlayer(p)
         end
     end
 
@@ -219,9 +248,8 @@ local function refreshList()
     list.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + 10)
 end
 
-refresh.MouseButton1Click:Connect(refreshList)
 Players.PlayerAdded:Connect(refreshList)
 Players.PlayerRemoving:Connect(refreshList)
 
 refreshList()
-notify(TITLE_TEXT,"Hub loaded successfully")
+notify(TITLE_TEXT, "Hub loaded")
