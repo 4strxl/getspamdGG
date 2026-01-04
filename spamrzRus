@@ -8,14 +8,7 @@ repeat task.wait() until LocalPlayer:FindFirstChild("PlayerGui")
 
 -- CONFIG
 local TITLE_TEXT = "4strxl spamrz"
-local COMMANDS = {
-    ";rocket",
-    ";balloon",
-    ";tiny",
-    ";inverse",
-    ";morph",
-    ";jumpscare"
-}
+local COMMANDS = { ";rocket", ";balloon", ";tiny", ";inverse", ";morph", ";jumpscare" }
 local JAIL_DELAY = 0.6
 local RAGDOLL_DELAY = 1.2
 
@@ -37,22 +30,16 @@ local function notify(t,d)
     end)
 end
 
--- CHAT BYPASS (safe)
-local SayMessageRequest
-pcall(function()
-    SayMessageRequest = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents",10)
-        :WaitForChild("SayMessageRequest",10)
-end)
+-- CHAT BYPASS
+local SayMessageRequest = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest")
 
 local function sendChat(msg)
-    if SayMessageRequest then
-        pcall(function()
-            SayMessageRequest:FireServer(msg,"All")
-        end)
-    end
+    pcall(function()
+        SayMessageRequest:FireServer(msg,"All")
+    end)
 end
 
--- MAX SPEED QUEUE
+-- CHAT QUEUE (bypasses cooldown)
 local ChatQueue = {}
 local sending = false
 
@@ -196,7 +183,6 @@ layout.Padding = UDim.new(0,6)
 local lastTarget
 local trackedPlayers = {}
 
--- Track player for jail/ragdoll after respawn
 local function trackPlayer(plr)
     if trackedPlayers[plr] then return end
     trackedPlayers[plr] = true
