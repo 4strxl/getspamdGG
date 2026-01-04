@@ -201,25 +201,13 @@ layout.Padding = UDim.new(0,6)
 
 -- SESSION TARGET
 local lastTarget
-local targetWatcher -- characterAdded connection
+local trackedPlayers = {}
 
--- SPAM FUNCTION + HOOK RESPAWN
-local function spamPlayer(plr)
-    lastTarget = plr
+-- Track player for jail/ragdoll after respawn
+local function trackPlayer(plr)
+    if trackedPlayers[plr] then return end
+    trackedPlayers[plr] = true
 
-    -- queue ALL commands separately (max speed)
-    for _, cmd in ipairs(COMMANDS) do
-        queueChat(cmd.." "..plr.Name)
-    end
-
-    notify("Sent","Max-speed spam @"..plr.Name)
-
-    -- Disconnect old watcher
-    if targetWatcher then
-        targetWatcher:Disconnect()
-    end
-
-    -- Hook respawn for jail/ragdoll
     local function onChar(char)
         local hum = char:WaitForChild("Humanoid",5)
         if not hum then return end
@@ -240,7 +228,21 @@ local function spamPlayer(plr)
     if plr.Character then
         onChar(plr.Character)
     end
-    targetWatcher = plr.CharacterAdded:Connect(onChar)
+    plr.CharacterAdded:Connect(onChar)
+end
+
+-- SPAM FUNCTION
+local function spamPlayer(plr)
+    lastTarget = plr
+
+    for _, cmd in ipairs(COMMANDS) do
+        queueChat(cmd.." "..plr.Name)
+    end
+
+    notify("Sent","Max-speed spam @"..plr.Name)
+
+    -- Track for jail/ragdoll
+    trackPlayer(plr)
 end
 
 -- BUTTON CREATOR
@@ -281,6 +283,8 @@ end
 
 Players.PlayerAdded:Connect(refreshList)
 Players.PlayerRemoving:Connect(refreshList)
+
+refresh.MouseButton1Click:Connect(refreshList)
 
 refreshList()
 notify(TITLE_TEXT,"Hub loaded successfully")
