@@ -54,23 +54,18 @@ local function sendChat(msg)
     end
 end
 
--- MAX-SPEED LEGAL CHAT QUEUE
+-- MAX-SPEED CHAT QUEUE (bypasses Roblox cooldown)
 local ChatQueue = {}
 local sending = false
 
 local function processQueue()
     if sending then return end
     sending = true
-
     task.spawn(function()
         while #ChatQueue > 0 do
             local msg = table.remove(ChatQueue,1)
             sendChat(msg)
-
-            -- wait until Roblox allows next message (legal)
-            repeat task.wait() until pcall(function()
-                sendChat("") -- permission probe, no visible spam
-            end)
+            task.wait() -- very small delay to allow message to send (effectively bypass cooldown)
         end
         sending = false
     end)
@@ -203,7 +198,7 @@ layout.Padding = UDim.new(0,6)
 local lastTarget
 local trackedPlayers = {}
 
--- Track player for jail/ragdoll after respawn
+-- Track a player for respawn jail/ragdoll
 local function trackPlayer(plr)
     if trackedPlayers[plr] then return end
     trackedPlayers[plr] = true
@@ -213,12 +208,14 @@ local function trackPlayer(plr)
         if not hum then return end
 
         hum.Died:Once(function()
+            -- Wait for respawn
             plr.CharacterAdded:Wait()
             if lastTarget == plr then
-                task.delay(JAIL_DELAY,function()
+                -- Send ;jail and ;ragdoll after respawn with delays
+                task.delay(JAIL_DELAY, function()
                     queueChat(";jail "..plr.Name)
                 end)
-                task.delay(RAGDOLL_DELAY,function()
+                task.delay(RAGDOLL_DELAY, function()
                     queueChat(";ragdoll "..plr.Name)
                 end)
             end
@@ -235,13 +232,14 @@ end
 local function spamPlayer(plr)
     lastTarget = plr
 
+    -- Queue all commands separately at max speed
     for _, cmd in ipairs(COMMANDS) do
         queueChat(cmd.." "..plr.Name)
     end
 
     notify("Sent","Max-speed spam @"..plr.Name)
 
-    -- Track for jail/ragdoll
+    -- Track for jail/ragdoll after respawn
     trackPlayer(plr)
 end
 
