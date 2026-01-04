@@ -38,62 +38,43 @@ local function notify(t,d)
     end)
 end
 
--- CHAT SENDER (NEW + OLD CHAT)
+-- CHAT SENDER
 local function sendChat(msg)
     if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
         local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if channel then
-            channel:SendAsync(msg)
-        end
+        if channel then channel:SendAsync(msg) end
     else
-        ReplicatedStorage
-            :WaitForChild("DefaultChatSystemChatEvents")
+        ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents")
             :WaitForChild("SayMessageRequest")
             :FireServer(msg, "All")
     end
 end
 
--- TRACK LAST TARGET (SESSION ONLY)
+-- SESSION TARGET TRACKING
 local lastTarget
-local deathConn
-local respawnConn
-
-local function clearConnections()
-    if deathConn then deathConn:Disconnect() deathConn = nil end
-    if respawnConn then respawnConn:Disconnect() respawnConn = nil end
-end
+local charConn
 
 local function hookTarget(plr)
-    clearConnections()
     lastTarget = plr
+    if charConn then charConn:Disconnect() end
 
-    local function onCharacter(char)
-        local humanoid = char:WaitForChild("Humanoid", 5)
-        if not humanoid then return end
+    charConn = plr.CharacterAdded:Connect(function()
+        if lastTarget ~= plr then return end
 
-        deathConn = humanoid.Died:Connect(function()
-            -- 0.6s after death -> jail
-            task.delay(JAIL_DELAY, function()
-                if lastTarget == plr then
-                    sendChat(";jail " .. plr.Name)
-                end
-            end)
-
-            -- wait for respawn
-            respawnConn = plr.CharacterAdded:Connect(function(newChar)
-                task.delay(RAGDOLL_DELAY, function()
-                    if lastTarget == plr then
-                        sendChat(";ragdoll " .. plr.Name)
-                    end
-                end)
-            end)
+        -- jail AFTER respawn
+        task.delay(JAIL_DELAY, function()
+            if lastTarget == plr then
+                sendChat(";jail " .. plr.Name)
+            end
         end)
-    end
 
-    if plr.Character then
-        onCharacter(plr.Character)
-    end
-    plr.CharacterAdded:Connect(onCharacter)
+        -- ragdoll AFTER respawn
+        task.delay(RAGDOLL_DELAY, function()
+            if lastTarget == plr then
+                sendChat(";ragdoll " .. plr.Name)
+            end
+        end)
+    end)
 end
 
 -- CLEAN OLD GUI
@@ -173,48 +154,16 @@ list.BorderSizePixel = 0
 local layout = Instance.new("UIListLayout", list)
 layout.Padding = UDim.new(0,6)
 
--- MINIMIZE
-local minimized = false
-minBtn.Activated:Connect(function()
-    minimized = not minimized
-    holder.Visible = not minimized
-    main.Size = minimized and UDim2.fromOffset(300,38) or UDim2.fromOffset(300,380)
-end)
-
--- DRAG
-do
-    local dragging, startMouse, startPos
-    top.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            startMouse = input.Position
-            startPos = main.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    top.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - startMouse
-            main.Position = UDim2.fromOffset(
-                startPos.X.Offset + delta.X,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
--- ⚡ FAST PARALLEL CHAT SPAM + TARGET HOOK
+-- SPAM FUNCTION (FAST + TARGET SET)
 local function spamPlayer(plr)
     hookTarget(plr)
+
     for _, cmd in ipairs(COMMANDS) do
         task.spawn(function()
             sendChat(cmd .. " " .. plr.Name)
         end)
     end
+
     notify("Sent","Instant-spammed @"..plr.Name)
 end
 
